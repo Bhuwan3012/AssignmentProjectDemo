@@ -1,0 +1,245 @@
+
+As per the project requirements, please use the attached database script to set up your database.
+
+You can create the database with your preferred name and use the provided tables and stored procedure in the project. In the application’s AppSettings, please add your own connection string. Note that the connection string in the project is intentionally left blank.
+
+The database script includes:
+
+Users Table: For user registration and login
+
+Tasks Table: For task management
+
+Stored Procedure sp_MainApi: Handles signup, login, task creation, update, deletion, search, and retrieval based on the action parameter
+
+Please make sure to execute the provided SQL script in your database before running the project.
+
+
+Database Creation Script (Example):
+
+
+CREATE DATABASE Bhuwan;
+
+USE Bhuwan;
+GO
+-------------------------------------------------
+-- 1) USERS TABLE
+-------------------------------------------------
+IF OBJECT_ID('dbo.Users', 'U') IS NOT NULL
+    DROP TABLE dbo.Users;
+GO
+
+CREATE TABLE dbo.Users
+(
+    UserId INT IDENTITY(1,1) PRIMARY KEY,
+    FullName NVARCHAR(100) NOT NULL,
+    Username NVARCHAR(50) NOT NULL UNIQUE,
+    PasswordHash NVARCHAR(500) NOT NULL,
+    UniqueId NVARCHAR(20) NOT NULL UNIQUE,
+    CreatedOn DATETIME DEFAULT GETDATE()
+);
+GO
+
+
+-------------------------------------------------
+-- 2) TASKS TABLE
+-------------------------------------------------
+IF OBJECT_ID('dbo.Tasks', 'U') IS NOT NULL
+    DROP TABLE dbo.Tasks;
+GO
+
+CREATE TABLE dbo.Tasks
+(
+    TaskId INT IDENTITY(1,1) PRIMARY KEY,
+    TaskTitle NVARCHAR(200) NOT NULL,
+    TaskDescription NVARCHAR(MAX) NULL,
+    TaskDueDate DATETIME NULL,
+    TaskStatus NVARCHAR(50) NULL,
+    TaskRemarks NVARCHAR(500) NULL,
+
+    CreatedOn DATETIME DEFAULT GETDATE(),
+    CreatedByName NVARCHAR(100) NULL,
+    CreatedById NVARCHAR(50) NULL,
+
+    LastUpdatedOn DATETIME NULL,
+    LastUpdatedByName NVARCHAR(100) NULL,
+    LastUpdatedById NVARCHAR(50) NULL
+);
+GO
+
+
+-------------------------------------------------
+-- 3) STORED PROCEDURE sp_MainApi
+-------------------------------------------------
+IF OBJECT_ID('dbo.sp_MainApi', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_MainApi;
+GO
+
+CREATE PROCEDURE dbo.sp_MainApi
+(
+    @Action NVARCHAR(50),
+
+    -- User Fields
+    @FullName NVARCHAR(100) = NULL,
+    @Username NVARCHAR(50) = NULL,
+    @PasswordHash NVARCHAR(500) = NULL,
+
+    -- Task Fields
+    @TaskId INT = NULL,
+    @TaskTitle NVARCHAR(200) = NULL,
+    @TaskDescription NVARCHAR(MAX) = NULL,
+    @TaskDueDate DATETIME = NULL,
+    @TaskStatus NVARCHAR(50) = NULL,
+    @TaskRemarks NVARCHAR(500) = NULL,
+
+    @CreatedByName NVARCHAR(100) = NULL,
+    @CreatedById NVARCHAR(50) = NULL,
+
+    @LastUpdatedByName NVARCHAR(100) = NULL,
+    @LastUpdatedById NVARCHAR(50) = NULL,
+
+    @SearchText NVARCHAR(200) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -------------------------------------------------
+    -- SIGNUP
+    -------------------------------------------------
+    IF @Action = 'SIGNUP'
+    BEGIN
+        IF EXISTS (SELECT 1 FROM Users WHERE Username = @Username)
+        BEGIN
+            SELECT 'Username already exists!' AS Message, NULL AS UniqueId;
+            RETURN;
+        END
+
+        DECLARE @LastUniqueId NVARCHAR(20);
+        DECLARE @NextNumber INT;
+        DECLARE @NewUniqueId NVARCHAR(20);
+
+        SELECT TOP 1 @LastUniqueId = UniqueId 
+        FROM Users 
+        ORDER BY UserId DESC;
+
+        IF @LastUniqueId IS NULL
+            SET @NextNumber = 1;
+        ELSE
+            SET @NextNumber = CAST(SUBSTRING(@LastUniqueId, 4, 10) AS INT) + 1;
+
+        SET @NewUniqueId = 'USR' + RIGHT('000' + CAST(@NextNumber AS VARCHAR(10)), 3);
+
+        INSERT INTO Users (FullName, Username, PasswordHash, UniqueId)
+        VALUES (@FullName, @Username, @PasswordHash, @NewUniqueId);
+
+        SELECT 'Signup Successful' AS Message, @NewUniqueId AS UniqueId;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- LOGIN (Password verify C# side pe hoga)
+    -------------------------------------------------
+    IF @Action = 'LOGIN'
+    BEGIN
+        SELECT UserId, FullName, Username, PasswordHash, UniqueId
+        FROM Users
+        WHERE Username = @Username;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- CREATE TASK
+    -------------------------------------------------
+    IF @Action = 'CREATE_TASK'
+    BEGIN
+        INSERT INTO Tasks
+        (TaskTitle, TaskDescription, TaskDueDate, TaskStatus, TaskRemarks,
+         CreatedOn, CreatedByName, CreatedById)
+        VALUES
+        (@TaskTitle, @TaskDescription, @TaskDueDate, @TaskStatus, @TaskRemarks,
+         GETDATE(), @CreatedByName, @CreatedById);
+
+        SELECT 'Task Created Successfully' AS Message;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- UPDATE TASK (Only Owner)
+    -------------------------------------------------
+    IF @Action = 'UPDATE_TASK'
+    BEGIN
+        UPDATE Tasks SET
+            TaskTitle = @TaskTitle,
+            TaskDescription = @TaskDescription,
+            TaskDueDate = @TaskDueDate,
+            TaskStatus = @TaskStatus,
+            TaskRemarks = @TaskRemarks,
+            LastUpdatedOn = GETDATE(),
+            LastUpdatedByName = @LastUpdatedByName,
+            LastUpdatedById = @LastUpdatedById
+        WHERE TaskId = @TaskId AND CreatedById = @CreatedById;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            SELECT 'You can update only your own task!' AS Message;
+            RETURN;
+        END
+
+        SELECT 'Task Updated Successfully' AS Message;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- DELETE TASK (Only Owner)
+    -------------------------------------------------
+    IF @Action = 'DELETE_TASK'
+    BEGIN
+        DELETE FROM Tasks
+        WHERE TaskId = @TaskId AND CreatedById = @CreatedById;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            SELECT 'You can delete only your own task!' AS Message;
+            RETURN;
+        END
+
+        SELECT 'Task Deleted Successfully' AS Message;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- GET ALL TASKS
+    -------------------------------------------------
+    IF @Action = 'GET_ALL_TASKS'
+    BEGIN
+        SELECT * FROM Tasks
+        ORDER BY TaskId DESC;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- SEARCH TASKS
+    -------------------------------------------------
+    IF @Action = 'SEARCH_TASKS'
+    BEGIN
+        SELECT * FROM Tasks
+        WHERE TaskTitle LIKE '%' + @SearchText + '%'
+           OR TaskStatus LIKE '%' + @SearchText + '%'
+           OR CreatedByName LIKE '%' + @SearchText + '%'
+        ORDER BY TaskId DESC;
+        RETURN;
+    END
+
+
+    -------------------------------------------------
+    -- INVALID ACTION
+    -------------------------------------------------
+    SELECT 'Invalid Action Provided' AS Message;
+END
+GO
