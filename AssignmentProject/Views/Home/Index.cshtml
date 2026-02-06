@@ -1,0 +1,46 @@
+﻿<!DOCTYPE html>
+<html lang="en" ng-app="taskApp">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login / Signup</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+	<script src="~/task.js"></script>
+</head>
+
+<body ng-controller="taskController">
+
+    <div class="box">
+
+        <div ng-show="!isSignup">
+            <h2>Login</h2>
+
+            <input type="text" ng-model="login.username" placeholder="Enter Username">
+            <input type="password" ng-model="login.password" placeholder="Enter Password">
+
+            <button ng-click="doLogin()">Login</button>
+
+            <div class="link" ng-click="showSignup()">
+                Create New Account (Signup)
+            </div>
+        </div>
+
+        <div ng-show="isSignup">
+            <h2>Signup</h2>
+
+            <input type="text" ng-model="signup.fullName" placeholder="Enter Full Name">
+            <input type="text" ng-model="signup.username" placeholder="Enter Username">
+            <input type="password" ng-model="signup.password" placeholder="Enter Password">
+
+            <button ng-click="doSignup()">Signup</button>
+
+            <div class="link" ng-click="showLogin()">
+                Already have account? Login
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
